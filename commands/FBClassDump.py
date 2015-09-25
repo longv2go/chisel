@@ -91,7 +91,7 @@ def instanceMethosOfClass(klass):
     ret = None
   return ret
 
-# OC array only can hold id, 
+# OC array only can hold id,
 # @return an array whose instance type is str of the oc object`s address
 
 def covertOCArrayToPyArray(oc_array):
@@ -166,7 +166,7 @@ class Method:
     return addr
 
   def __str__(self):
-    return "<Method:" + self.oc_method + "> " + self.name + " --- " + self.type + " --- " + self.imp 
+    return "<Method:" + self.oc_method + "> " + self.name + " --- " + self.type + " --- " + self.imp
 
 def createMethodFromOCMethod(method):
   process = lldb.debugger.GetSelectedTarget().GetProcess()
