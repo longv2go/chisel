@@ -8,6 +8,7 @@
 # of patent rights can be found in the PATENTS file in the same directory.
 
 import lldb
+import json
 
 class FBCommandArgument:
   def __init__(self, short='', long='', arg='', type='', help='', default='', boolean=False):
@@ -112,12 +113,15 @@ def check_expr(expr):
 
 # evaluates a batch of OC expression, the last expression must contain a RET marco
 # and it will automatic transform the RET OC object to python object
+# Example:
+#       eval('RET(@{@"key":@"value"});') -> {u'key': u'value'}
+#
 def eval(expr):
     if not check_expr(expr):
         raise Exception("expr not Invalied")
 
     command = "({" + RET_MACRO + '\n' + expr + "})"
-    ret = fb.evaluateExpressionValue(command, True)
+    ret = evaluateExpressionValue(command, True)
     if not ret.GetError().Success():
         raise Exception("eval expression error occur")
     else:
