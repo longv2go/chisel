@@ -110,7 +110,8 @@ RET_MACRO = """
 def check_expr(expr):
     return expr.strip().split('\n')[-1].find('RET') != -1
 
-# expr `s last expression must contain a RET marco
+# evaluates a batch of OC expression, the last expression must contain a RET marco
+# and it will automatic transform the RET OC object to python object
 def eval(expr):
     if not check_expr(expr):
         raise Exception("expr not Invalied")
