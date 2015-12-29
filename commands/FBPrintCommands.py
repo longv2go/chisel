@@ -9,6 +9,7 @@
 
 import os
 import re
+import string
 
 import lldb
 import fblldbbase as fb
@@ -40,6 +41,7 @@ def lldbcommands():
     FBPrintObjectInSwift(),
     FBExpressionInObjc(),
     FBExpressionInSwift(),
+    FBPrintBlock(),
   ]
 
 class FBPrintViewHierarchyCommand(fb.FBCommand):
@@ -628,3 +630,65 @@ class FBExpressionInSwift(fb.FBCommand):
     else:
         expression = arguments[0]
         lldb.debugger.HandleCommand('expression -l Swift -- ' + expression)
+
+class FBPrintBlock(fb.FBCommand):
+  def name(self):
+    return 'pblock'
+
+  def description(self):
+    return 'Print the Objective-C block information'
+
+  def args(self):
+    return [
+      fb.FBCommandArgument(arg='block', help='The block you want to print'),
+    ]
+
+  def run(self, arguments, options):
+    block = arguments[0]
+    tmpString = """
+    enum {
+      BLOCK_HAS_COPY_DISPOSE =  (1 << 25),
+      BLOCK_HAS_CTOR =          (1 << 26), // helpers have C++ code
+      BLOCK_IS_GLOBAL =         (1 << 28),
+      BLOCK_HAS_STRET =         (1 << 29), // IFF BLOCK_HAS_SIGNATURE
+      BLOCK_HAS_SIGNATURE =     (1 << 30),
+    };
+
+    struct Block_literal_1 {
+      void *isa; // initialized to &_NSConcreteStackBlock or &_NSConcreteGlobalBlock
+      int flags;
+      int reserved;
+      void (*invoke)(void *, ...);
+      struct Block_descriptor_1 {
+          unsigned long int reserved; // NULL
+          unsigned long int size;         // sizeof(struct Block_literal_1)
+          // optional helper functions
+          void (*copy_helper)(void *dst, void *src);     // IFF (1<<25)
+          void (*dispose_helper)(void *src);             // IFF (1<<25)
+          // required ABI.2010.3.16
+          const char *signature;                         // IFF (1<<30)
+      } *descriptor;
+      // imported variables
+    };
+
+    struct Block_literal_1 real = *((__bridge struct Block_literal_1 *)$block);
+
+     NSMutableDictionary *dict = (id)[NSMutableDictionary dictionary];
+    [dict setObject:(id)[NSNumber numberWithLong:(long)real.invoke] forKey:@"invoke"];
+    
+    if (real.flags & BLOCK_HAS_COPY_DISPOSE) {
+        (void)NSLog(@"seg: %s",(real.descriptor)->signature);
+        [dict setObject:[NSString stringWithUTF8String:(char *)(real.descriptor)->signature] forKey:@"signature"];
+    } else {
+        (void)NSLog(@"seg: %s",(char *)(real.descriptor)->copy_helper);
+        [dict setObject:[NSString stringWithUTF8String:(char *)(real.descriptor)->copy_helper] forKey:@"signature"];
+    }
+    
+    RETURN(dict);
+    """
+    command = string.Template(tmpString).substitute(block=block)
+    json = fb.evaluate(command)
+
+    print 'Imp: ' + hex(json['invoke'])
+    print 'Signature: ' + json['signature']
+
