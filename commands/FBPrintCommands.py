@@ -673,16 +673,24 @@ class FBPrintBlock(fb.FBCommand):
 
     struct Block_literal_1 real = *((__bridge struct Block_literal_1 *)$block);
 
-     NSMutableDictionary *dict = (id)[NSMutableDictionary dictionary];
+    NSMutableDictionary *dict = (id)[NSMutableDictionary dictionary];
+    
     [dict setObject:(id)[NSNumber numberWithLong:(long)real.invoke] forKey:@"invoke"];
     
+    char *signature;
     if (real.flags & BLOCK_HAS_COPY_DISPOSE) {
-        (void)NSLog(@"seg: %s",(real.descriptor)->signature);
-        [dict setObject:[NSString stringWithUTF8String:(char *)(real.descriptor)->signature] forKey:@"signature"];
+        signature = (char *)(real.descriptor)->signature;
     } else {
-        (void)NSLog(@"seg: %s",(char *)(real.descriptor)->copy_helper);
-        [dict setObject:[NSString stringWithUTF8String:(char *)(real.descriptor)->copy_helper] forKey:@"signature"];
+        signature = (char *)(real.descriptor)->copy_helper;
     }
+    NSMethodSignature *sig = [NSMethodSignature signatureWithObjCTypes:signature];
+    NSMutableArray *types = [NSMutableArray array];
+    for (NSUInteger i = 0; i < sig.numberOfArguments; i++) {
+        char *type = (char *)[sig getArgumentTypeAtIndex:i];
+        [types addObject:(id)[NSString stringWithUTF8String:type]];
+    }
+    
+    [dict setObject:types forKey:@"signature"];
     
     RETURN(dict);
     """
@@ -690,5 +698,5 @@ class FBPrintBlock(fb.FBCommand):
     json = fb.evaluate(command)
 
     print 'Imp: ' + hex(json['invoke'])
-    print 'Signature: ' + json['signature']
-
+    print json['signature']
+    
