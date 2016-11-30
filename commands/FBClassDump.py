@@ -9,7 +9,7 @@ def lldbcommands():
     FBPrintMethods(),
     FBPrintProperties(),
     FBPrintBlock(),
-    FBPrintIvars()  
+    FBPrintIvars()
   ]
 
 class FBPrintMethods(fb.FBCommand):
@@ -150,7 +150,7 @@ class FBPrintBlock(fb.FBCommand):
     struct Block_literal_1 real = *((__bridge struct Block_literal_1 *)$block);
     NSMutableDictionary *dict = (id)[NSMutableDictionary dictionary];
 
-    [dict setObject:(id)[NSNumber numberWithLong:(long)real.invoke] forKey:@"invoke"];
+    [dict setObject:(id)[NSNumber numberWithLong:(long)real.invoke] forKey:(id _Nonnull)@"invoke"];
 
     if (real.flags & BLOCK_HAS_SIGNATURE) {
       char *signature;
@@ -163,14 +163,14 @@ class FBPrintBlock(fb.FBCommand):
       NSMethodSignature *sig = [NSMethodSignature signatureWithObjCTypes:signature];
       NSMutableArray *types = [NSMutableArray array];
 
-      [types addObject:(id)[NSString stringWithUTF8String:(char *)[sig methodReturnType]]];
+      [types addObject:(id _Nonnull)[NSString stringWithUTF8String:(char *)[sig methodReturnType]]];
 
       for (NSUInteger i = 0; i < sig.numberOfArguments; i++) {
           char *type = (char *)[sig getArgumentTypeAtIndex:i];
-          [types addObject:(id)[NSString stringWithUTF8String:type]];
+          [types addObject:(id _Nonnull)[NSString stringWithUTF8String:type]];
       }
 
-      [dict setObject:types forKey:@"signature"];
+      [dict setObject:types forKey:(id _Nonnull)@"signature"];
     }
 
     RETURN(dict);
@@ -178,7 +178,7 @@ class FBPrintBlock(fb.FBCommand):
     command = string.Template(tmpString).substitute(block=block)
     json = fb.evaluate(command)
 
-    signature = json['signature']
+    signature = json.get('signature')
     if not signature:
       print 'Imp: ' + hex(json['invoke'])
       return
@@ -283,10 +283,10 @@ def getMethods(klass):
       NSMutableDictionary *m = (id)[NSMutableDictionary dictionary];
 
       SEL name = (SEL)method_getName(methods[i]);
-      [m setObject:(id)NSStringFromSelector(name) forKey:@"name"];
+      [m setObject:(id)NSStringFromSelector(name) forKey:(id _Nonnull)@"name"];
 
       char * encoding = (char *)method_getTypeEncoding(methods[i]);
-      [m setObject:(id)[NSString stringWithUTF8String:encoding] forKey:@"type_encoding"];
+      [m setObject:(id)[NSString stringWithUTF8String:encoding] forKey:(id _Nonnull)@"type_encoding"];
 
       NSMutableArray *types = (id)[NSMutableArray array];
       NSInteger args = (NSInteger)method_getNumberOfArguments(methods[i]);
@@ -294,13 +294,13 @@ def getMethods(klass):
           char *type = (char *)method_copyArgumentType(methods[i], idx);
           [types addObject:(id)[NSString stringWithUTF8String:type]];
       }
-      [m setObject:types forKey:@"parameters_type"];
+      [m setObject:types forKey:(id _Nonnull)@"parameters_type"];
 
       char *ret_type = (char *)method_copyReturnType(methods[i]);
-      [m setObject:(id)[NSString stringWithUTF8String:ret_type] forKey:@"return_type"];
+      [m setObject:(id)[NSString stringWithUTF8String:ret_type] forKey:(id _Nonnull)@"return_type"];
 
       long imp = (long)method_getImplementation(methods[i]);
-      [m setObject:[NSNumber numberWithLongLong:imp] forKey:@"implementation"];
+      [m setObject:[NSNumber numberWithLongLong:imp] forKey:(id _Nonnull)@"implementation"];
 
       [result addObject:m];
     }
@@ -408,12 +408,12 @@ def getIvars(klass, instance=None):
       NSMutableArray *result = (id)[NSMutableArray array];
       unsigned int count;
       id object = (id)$obj;
-      
+
       Ivar *vars = (Ivar *)class_copyIvarList((Class)$cls, &count);
       if (vars) {
           for (int i = 0; i < count; i++) {
               NSMutableDictionary *dict = (id)[NSMutableDictionary dictionary];
-              
+
               char *name = (char *)ivar_getName(vars[i]);
               [dict setObject:(id _Nonnull)[NSString stringWithUTF8String:name] forKey:(id _Nonnull)@"name"];
               NSString *encoding = [NSString stringWithUTF8String:(char *)ivar_getTypeEncoding(vars[i])];
@@ -448,6 +448,5 @@ class Ivar:
   def prettyPrintString(self, indent=0):
     ret = "[" + hex(self.offset) + "] " + decode(self.encoding) + " " + self.name
     if self.value:
-      ret = ret + " ->" + hex(self.value) 
+      ret = ret + " ->" + hex(self.value)
     return " "*indent + ret
-
