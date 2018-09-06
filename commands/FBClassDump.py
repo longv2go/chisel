@@ -415,15 +415,15 @@ def getIvars(klass, instance=None):
               NSMutableDictionary *dict = (id)[NSMutableDictionary dictionary];
 
               char *name = (char *)ivar_getName(vars[i]);
-              [dict setValue:(id _Nonnull)[NSString stringWithUTF8String:name] forKey:(id _Nonnull)@"name"];
+              [dict setObject:(id _Nonnull)[NSString stringWithUTF8String:name] forKey:(id _Nonnull)@"name"];
               NSString *encoding = [NSString stringWithUTF8String:(char *)ivar_getTypeEncoding(vars[i])];
-              [dict setValue:(id _Nonnull)encoding forKey:(id _Nonnull)@"encoding"];
+              [dict setObject:(id _Nonnull)encoding forKey:(id _Nonnull)@"encoding"];
               NSNumber *offset = [NSNumber numberWithLong:(ptrdiff_t)ivar_getOffset(vars[i])];
-              [dict setValue:(id _Nonnull)offset forKey:(id _Nonnull)@"offset"];
+              [dict setObject:(id _Nonnull)offset forKey:(id _Nonnull)@"offset"];
 
               if (object) {
                 id value = (id)object_getIvar((id)object, vars[i]);
-                [dict setValue:(id _Nonnull)[NSNumber numberWithLong:(long)value] forKey:(id _Nonnull)@"value"];
+                [dict setObject:(id _Nonnull)[NSNumber numberWithLong:(long)value] forKey:(id _Nonnull)@"value"];
               }
 
               [result addObject:dict];
