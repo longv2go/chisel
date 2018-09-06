@@ -280,13 +280,13 @@ def getMethods(klass):
     NSMutableArray *result = (id)[NSMutableArray array];
 
     for (int i = 0; i < outCount; i++) {
-      NSMutableDictionary *m = (id)[NSMutableDictionary dictionary];
+      NSMutableDictionary *_m = (id)[NSMutableDictionary dictionary];
 
       SEL name = (SEL)method_getName(methods[i]);
-      [m setObject:(id)NSStringFromSelector(name) forKey:(id _Nonnull)@"name"];
+      [_m setObject:(id)NSStringFromSelector(name) forKey:(id _Nonnull)@"name"];
 
-      char * encoding = (char *)method_getTypeEncoding(methods[i]);
-      [m setObject:(id)[NSString stringWithUTF8String:encoding] forKey:(id _Nonnull)@"type_encoding"];
+      char * _encoding = (char *)method_getTypeEncoding(methods[i]);
+      [_m setObject:(id)[NSString stringWithUTF8String:_encoding] forKey:(id _Nonnull)@"type_encoding"];
 
       NSMutableArray *types = (id)[NSMutableArray array];
       NSInteger args = (NSInteger)method_getNumberOfArguments(methods[i]);
@@ -294,15 +294,15 @@ def getMethods(klass):
           char *type = (char *)method_copyArgumentType(methods[i], idx);
           [types addObject:(id)[NSString stringWithUTF8String:type]];
       }
-      [m setObject:types forKey:(id _Nonnull)@"parameters_type"];
+      [_m setObject:types forKey:(id _Nonnull)@"parameters_type"];
 
       char *ret_type = (char *)method_copyReturnType(methods[i]);
-      [m setObject:(id)[NSString stringWithUTF8String:ret_type] forKey:(id _Nonnull)@"return_type"];
+      [_m setObject:(id)[NSString stringWithUTF8String:ret_type] forKey:(id _Nonnull)@"return_type"];
 
       long imp = (long)method_getImplementation(methods[i]);
-      [m setObject:[NSNumber numberWithLongLong:imp] forKey:(id _Nonnull)@"implementation"];
+      [_m setObject:[NSNumber numberWithLongLong:imp] forKey:(id _Nonnull)@"implementation"];
 
-      [result addObject:m];
+      [result addObject:_m];
     }
     RETURN(result);
   """
