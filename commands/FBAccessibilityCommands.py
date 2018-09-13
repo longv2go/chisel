@@ -35,7 +35,7 @@ class FBPrintAccessibilityLabels(fb.FBCommand):
     return [ fb.FBCommandArgument(arg='aView', type='UIView*', help='The view to print the hierarchy of.', default='(id)[[UIApplication sharedApplication] keyWindow]') ]
 
   def run(self, arguments, options):
-    forceStartAccessibilityServer();
+    forceStartAccessibilityServer()
     printAccessibilityHierarchy(arguments[0])
 
 class FBPrintAccessibilityIdentifiers(fb.FBCommand):
@@ -49,6 +49,7 @@ class FBPrintAccessibilityIdentifiers(fb.FBCommand):
     return [ fb.FBCommandArgument(arg='aView', type='UIView*', help='The view to print the hierarchy of.', default='(id)[[UIApplication sharedApplication] keyWindow]') ]
 
   def run(self, arguments, option):
+    forceStartAccessibilityServer()
     printAccessibilityIdentifiersHierarchy(arguments[0])
 
 class FBFindViewByAccessibilityLabelCommand(fb.FBCommand):
@@ -66,7 +67,11 @@ class FBFindViewByAccessibilityLabelCommand(fb.FBCommand):
     #if we don't have any accessibility string - we should have some children
     if int(a11yLabel.GetValue(), 16) == 0:
       #We call private method that gives back all visible accessibility children for view
-      accessibilityElements = fb.evaluateObjectExpression('[[[UIApplication sharedApplication] keyWindow] _accessibilityElementsInContainer:0 topLevel:%s includeKB:0]' % view)
+      # iOS 10 and higher
+      if fb.evaluateBooleanExpression('[UIView respondsToSelector:@selector(_accessibilityElementsAndContainersDescendingFromViews:options:sorted:)]'):
+        accessibilityElements = fb.evaluateObjectExpression('[UIView _accessibilityElementsAndContainersDescendingFromViews:@[(id)%s] options:0 sorted:NO]' % view)
+      else:
+        accessibilityElements = fb.evaluateObjectExpression('[[[UIApplication sharedApplication] keyWindow] _accessibilityElementsInContainer:0 topLevel:%s includeKB:0]' % view)
       accessibilityElementsCount = fb.evaluateIntegerExpression('[%s count]' % accessibilityElements)
       for index in range(0, accessibilityElementsCount):
         subview = fb.evaluateObjectExpression('[%s objectAtIndex:%i]' % (accessibilityElements, index))

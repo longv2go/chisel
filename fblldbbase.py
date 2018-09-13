@@ -9,6 +9,7 @@
 
 import lldb
 import json
+import shlex
 
 class FBCommandArgument:
   def __init__(self, short='', long='', arg='', type='', help='', default='', boolean=False):
@@ -33,33 +34,64 @@ class FBCommand:
   def description(self):
     return ''
 
+  def lex(self, commandLine):
+    return shlex.split(commandLine)
+
   def run(self, arguments, option):
     pass
 
+def isSuccess(error):
+  # When evaluating a `void` expression, the returned value will indicate an
+  # error. This error is named: kNoResult. This error value does *not* mean
+  # there was a problem. This logic follows what the builtin `expression`
+  # command does. See: https://git.io/vwpjl (UserExpression.h)
+  kNoResult = 0x1001
+  return error.success or error.value == kNoResult
+
+def importModule(frame, module):
+  options = lldb.SBExpressionOptions()
+  options.SetLanguage(lldb.eLanguageTypeObjC)
+  value = frame.EvaluateExpression('@import ' + module, options)
+  return isSuccess(value.error)
+
 # evaluates expression in Objective-C++ context, so it will work even for
 # Swift projects
-def evaluateExpressionValue(expression, printErrors=True):
+def evaluateExpressionValue(expression, printErrors=True, language=lldb.eLanguageTypeObjC_plus_plus, tryAllThreads=False):
   frame = lldb.debugger.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame()
   options = lldb.SBExpressionOptions()
-  options.SetLanguage(lldb.eLanguageTypeObjC_plus_plus)
+  options.SetLanguage(language)
+
+  # Allow evaluation that contains a @throw/@catch.
+  #   By default, ObjC @throw will cause evaluation to be aborted. At the time
+  #   of a @throw, it's not known if the exception will be handled by a @catch.
+  #   An exception that's caught, should not cause evaluation to fail.
   options.SetTrapExceptions(False)
+
+  # Give evaluation more time.
+  options.SetTimeoutInMicroSeconds(5000000) # 5s
+
+  # Most Chisel commands are not multithreaded.
+  options.SetTryAllThreads(tryAllThreads)
+
   value = frame.EvaluateExpression(expression, options)
   error = value.GetError()
 
-  if printErrors and error.Fail():
-    # When evaluating a `void` expression, the returned value has an error code named kNoResult.
-    # This is not an error that should be printed. This follows what the built in `expression` command does.
-    # See: https://git.io/vwpjl (UserExpression.h)
-    kNoResult = 0x1001
-    if error.GetError() != kNoResult:
-      print error
+  # Retry if the error could be resolved by first importing UIKit.
+  if (error.type == lldb.eErrorTypeExpression and
+      error.value == lldb.eExpressionParseError and
+      importModule(frame, 'UIKit')):
+    value = frame.EvaluateExpression(expression, options)
+    error = value.GetError()
+
+  if printErrors and not isSuccess(error):
+    print error
 
   return value
 
 def evaluateInputExpression(expression, printErrors=True):
   # HACK
   if expression.startswith('(id)'):
-    return evaluateExpressionValue(expression, printErrors).GetValue()
+    return evaluateExpressionValue(expression, printErrors=printErrors).GetValue()
 
   frame = lldb.debugger.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame()
   options = lldb.SBExpressionOptions()
@@ -78,19 +110,19 @@ def evaluateIntegerExpression(expression, printErrors=True):
     output = output[2:]
   elif output.startswith('\\'): # Or as \0 (Dec)
     output = output[1:]
-  return int(output, 16)
+  return int(output, 0)
 
 def evaluateBooleanExpression(expression, printErrors=True):
   return (int(evaluateIntegerExpression('(BOOL)(' + expression + ')', printErrors)) != 0)
 
 def evaluateExpression(expression, printErrors=True):
-  return evaluateExpressionValue(expression, printErrors).GetValue()
+  return evaluateExpressionValue(expression, printErrors=printErrors).GetValue()
 
 def describeObject(expression, printErrors=True):
   return evaluateExpressionValue('(id)(' + expression + ')', printErrors).GetObjectDescription()
 
 def evaluateEffect(expression, printErrors=True):
-  evaluateExpressionValue('(void)(' + expression + ')', printErrors)
+  evaluateExpressionValue('(void)(' + expression + ')', printErrors=printErrors)
 
 def evaluateObjectExpression(expression, printErrors=True):
   return evaluateExpression('(id)(' + expression + ')', printErrors)
@@ -140,7 +172,7 @@ def evaluate(expr):
     raise Exception("Invalid Expression, the last expression not include a RETURN family marco")
 
   command = "({" + RETURN_MACRO + '\n' + expr + "})"
-  ret = evaluateExpressionValue(command, True)
+  ret = evaluateExpressionValue(command, printErrors=True)
   if not ret.GetError().Success():
     print ret.GetError()
     return None
@@ -154,3 +186,6 @@ def evaluate(expr):
     else:
       ret = json.loads(ret)
       return ret['return']
+
+def currentLanguage():
+  return lldb.debugger.GetSelectedTarget().GetProcess().GetSelectedThread().GetSelectedFrame().GetCompileUnit().GetLanguage()

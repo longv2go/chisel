@@ -4,10 +4,7 @@ import os
 
 import lldb
 import fblldbbase as fb
-
-def lldbinit():
-  # Tell LLDB to print CKComponentAction as a c-string
-  lldb.debugger.HandleCommand('type summary add --summary-string "${var%c-string}" CKComponentAction')
+import fblldbviewhelpers as viewHelpers
 
 def lldbcommands():
   return [
@@ -54,13 +51,17 @@ class FBComponentsPrintCommand(fb.FBCommand):
     ]
 
   def args(self):
-    return [ fb.FBCommandArgument(arg='aView', type='UIView*', help='The view to from which the search for components begins.', default='(id)[[UIApplication sharedApplication] keyWindow]') ]
+    return [ fb.FBCommandArgument(arg='aView', type='UIView* or CKComponent*', help='The view or component from which the search for components begins.', default='(id)[[UIApplication sharedApplication] keyWindow]') ]
 
   def run(self, arguments, options):
     upwards = 'YES' if options.upwards else 'NO'
     showViews = 'YES' if options.showViews == 'YES' else 'NO'
 
     view = fb.evaluateInputExpression(arguments[0])
+    if not viewHelpers.isView(view):
+        # assume it's a CKComponent
+        view = fb.evaluateExpression('((CKComponent *)%s).viewContext.view' % view)
+
     print fb.describeObject('[CKComponentHierarchyDebugHelper componentHierarchyDescriptionForView:(UIView *)' + view + ' searchUpwards:' + upwards + ' showViews:' + showViews + ']')
 
 class FBComponentsReflowCommand(fb.FBCommand):
@@ -68,17 +69,7 @@ class FBComponentsReflowCommand(fb.FBCommand):
     return 'rcomponents'
 
   def description(self):
-    return 'Synchronously reflow and update root components found starting from <aView>.'
-
-  def options(self):
-    return [ fb.FBCommandArgument(short='-u', long='--up', arg='upwards', boolean=True, default=False, help='Reflow only the root components found on the first superview that has them, carrying the search up to its window.') ]
-
-  def args(self):
-    return [ fb.FBCommandArgument(arg='aView', type='UIView*', help='The view to from which the search for the root components begins.', default='(id)[[UIApplication sharedApplication] keyWindow]') ]
+    return 'Synchronously reflow and update all components.'
 
   def run(self, arguments, options):
-    upwards = 'NO'
-    if options.upwards:
-      upwards = 'YES'
-
-    fb.evaluateEffect('[CKComponentDebugController reflowComponentsForView:(UIView *)' + arguments[0] + ' searchUpwards:' + upwards + ']')
+    fb.evaluateEffect('[CKComponentDebugController reflowComponents]')

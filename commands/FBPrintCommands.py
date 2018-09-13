@@ -35,6 +35,7 @@ def lldbcommands():
     FBPrintData(),
     FBPrintTargetActions(),
     FBPrintJSON(),
+    FBPrintSwiftJSON(),
     FBPrintAsCurl(),
     FBPrintToClipboard(),
     FBPrintObjectInObjc(),
@@ -51,6 +52,7 @@ class FBPrintViewHierarchyCommand(fb.FBCommand):
     return [
       fb.FBCommandArgument(short='-u', long='--up', arg='upwards', boolean=True, default=False, help='Print only the hierarchy directly above the view, up to its window.'),
       fb.FBCommandArgument(short='-d', long='--depth', arg='depth', type='int', default="0", help='Print only to a given depth. 0 indicates infinite depth.'),
+      fb.FBCommandArgument(short='-w', long='--window', arg='window', type='int', default="0", help='Specify the window to print a description of. Check which windows exist with "po (id)[[UIApplication sharedApplication] windows]".'),
     ]
 
   def args(self):
@@ -58,13 +60,19 @@ class FBPrintViewHierarchyCommand(fb.FBCommand):
 
   def run(self, arguments, options):
     maxDepth = int(options.depth)
+    window = int(options.window)
     isMac = runtimeHelpers.isMacintoshArch()
 
-    if arguments[0] == '__keyWindow_dynamic__':
-      arguments[0] = '(id)[[UIApplication sharedApplication] keyWindow]'
-
+    if window > 0:
+      if isMac:
+        arguments[0] = '(id)[[[[NSApplication sharedApplication] windows] objectAtIndex:' + str(window) + '] contentView]'
+      else:
+        arguments[0] = '(id)[[[UIApplication sharedApplication] windows] objectAtIndex:' + str(window) + ']'
+    elif arguments[0] == '__keyWindow_dynamic__':
       if isMac:
         arguments[0] = '(id)[[[[NSApplication sharedApplication] windows] objectAtIndex:0] contentView]'
+      else:
+        arguments[0] = '(id)[[UIApplication sharedApplication] keyWindow]'
 
     if options.upwards:
       view = arguments[0]
@@ -85,7 +93,6 @@ class FBPrintViewHierarchyCommand(fb.FBCommand):
         description += "\n"
         description = re.sub(r'%s.*\n' % (prefixToRemove), r'', description)
       print description
-
 
 class FBPrintCoreAnimationTree(fb.FBCommand):
   def name(self):
@@ -173,7 +180,7 @@ class FBPrintUpwardResponderChain(fb.FBCommand):
     return [ fb.FBCommandArgument(arg='startResponder', type='UIResponder *', help='The responder to use to start walking the chain.') ]
 
   def run(self, arguments, options):
-    startResponder = arguments[0]
+    startResponder = fb.evaluateInputExpression(arguments[0])
 
     isMac = runtimeHelpers.isMacintoshArch()
     responderClass = 'UIResponder'
@@ -259,12 +266,23 @@ class FBPrintInternals(fb.FBCommand):
 
   def args(self):
     return [ fb.FBCommandArgument(arg='object', type='id', help='Object expression to be evaluated.') ]
+  
+  def options(self):
+    return [
+          fb.FBCommandArgument(arg='appleWay', short='-a', long='--apple', boolean=True, default=False, help='Print ivars the apple way')
+    ]
 
   def run(self, arguments, options):
     object = fb.evaluateObjectExpression(arguments[0])
-    objectClass = fb.evaluateExpressionValue('(id)[(id)(' + object + ') class]').GetObjectDescription()
-
-    command = 'p *(({} *)((id){}))'.format(objectClass, object)
+    if options.appleWay:
+        if fb.evaluateBooleanExpression('[{} respondsToSelector:@selector(_ivarDescription)]'.format(object)):
+            command = 'po [{} _ivarDescription]'.format(object)
+        else:
+            print 'Sorry, but it seems Apple dumped the _ivarDescription method'
+            return
+    else:
+        objectClass = fb.evaluateExpressionValue('(id)[(id)(' + object + ') class]').GetObjectDescription()
+        command = 'p *(({} *)((id){}))'.format(objectClass, object)
     lldb.debugger.HandleCommand(command)
 
 
@@ -290,8 +308,8 @@ class FBPrintInstanceVariable(fb.FBCommand):
     ivarTypeCommand = '((char *)ivar_getTypeEncoding((void*)object_getInstanceVariable((id){}, \"{}\", 0)))[0]'.format(object, ivarName)
     ivarTypeEncodingFirstChar = fb.evaluateExpression(ivarTypeCommand)
 
-    result = fb.evaluateExpressionValue('(({} *)({}))->{}'.format(printCommand, objectClass, object, ivarName))
-    return result.GetObjectDescription() if '@' in ivarTypeEncodingFirstChar else result.GetValue()
+    result = fb.evaluateExpressionValue('(({} *)({}))->{}'.format(objectClass, object, ivarName))
+    print result.GetObjectDescription() if '@' in ivarTypeEncodingFirstChar else result
 
 class FBPrintKeyPath(fb.FBCommand):
   def name(self):
@@ -444,7 +462,7 @@ class FBPrintTargetActions(fb.FBCommand):
     return [ fb.FBCommandArgument(arg='control', type='UIControl *', help='The control to inspect the actions of.') ]
 
   def run(self, arguments, options):
-    control = arguments[0]
+    control = fb.evaluateInputExpression(arguments[0])
     targets = fb.evaluateObjectExpression('[[{control} allTargets] allObjects]'.format(control=control))
     targetCount = fb.evaluateIntegerExpression('[{targets} count]'.format(targets=targets))
 
@@ -474,12 +492,35 @@ class FBPrintJSON(fb.FBCommand):
     return [ fb.FBCommandArgument(arg='object', type='id', help='The NSDictionary or NSArray object to print') ]
 
   def run(self, arguments, options):
-    objectToPrint = arguments[0]
+    objectToPrint = fb.evaluateInputExpression(arguments[0])
     pretty = 1 if options.plain is None else 0
     jsonData = fb.evaluateObjectExpression('[NSJSONSerialization dataWithJSONObject:(id){} options:{} error:nil]'.format(objectToPrint, pretty))
     jsonString = fb.evaluateExpressionValue('(NSString*)[[NSString alloc] initWithData:(id){} encoding:4]'.format(jsonData)).GetObjectDescription()
 
     print jsonString
+
+class FBPrintSwiftJSON(fb.FBCommand):
+    
+  def name(self):
+      return 'psjson'
+      
+  def description(self):
+      return 'Print JSON representation of Swift Dictionary or Swift Array object'
+          
+  def options(self):
+      return [ fb.FBCommandArgument(arg='plain', short='-p', long='--plain', boolean=True, default=False, help='Plain JSON') ]
+          
+  def args(self):
+      return [ fb.FBCommandArgument(arg='object', type='NSObject *', help='The Swift Dictionary or Swift Array to print') ]
+          
+  def run(self, arguments, options):
+      #Convert to NSObject first to allow for objc runtime to process it
+      objectToPrint = fb.evaluateInputExpression('{obj} as NSObject'.format(obj=arguments[0]))
+      pretty = 1 if options.plain is None else 0
+      jsonData = fb.evaluateObjectExpression('[NSJSONSerialization dataWithJSONObject:(NSObject*){} options:{} error:nil]'.format(objectToPrint, pretty))
+      jsonString = fb.evaluateExpressionValue('(NSString*)[[NSString alloc] initWithData:(NSObject*){} encoding:4]'.format(jsonData)).GetObjectDescription()
+
+      print jsonString
 
 class FBPrintAsCurl(fb.FBCommand):
   def name(self):
@@ -500,7 +541,7 @@ class FBPrintAsCurl(fb.FBCommand):
     return '/tmp/curl_data_{}'.format(fb.evaluateExpression('(NSTimeInterval)[NSDate timeIntervalSinceReferenceDate]'))
 
   def run(self, arguments, options):
-    request = arguments[0]
+    request = fb.evaluateInputExpression(arguments[0])
     HTTPHeaderSring = ''
     HTTPMethod = fb.evaluateExpressionValue('(id)[{} HTTPMethod]'.format(request)).GetObjectDescription()
     URL = fb.evaluateExpressionValue('(id)[{} URL]'.format(request)).GetObjectDescription()
