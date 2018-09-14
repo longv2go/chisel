@@ -172,8 +172,8 @@ class FBPrintBlock(fb.FBCommand):
 
       [dict setObject:types forKey:(id _Nonnull)@"signature"];
     }
-
-    RETURN(dict);
+    
+    RETURN_JSON(dict);
     """
     command = string.Template(tmpString).substitute(block=block)
     json = fb.evaluate(command)
@@ -304,7 +304,7 @@ def getMethods(klass):
 
       [result addObject:_m];
     }
-    RETURN(result);
+    RETURN_JSON(result);
   """
   command = string.Template(tmpString).substitute(cls=klass)
   methods = fb.evaluate(command)
@@ -363,7 +363,7 @@ def getProperties(klass):
 
           [result addObject:dict];
       }
-      RETURN(result);
+      RETURN_JSON(result);
     """
   command = string.Template(tmpString).substitute(cls=klass)
   propsJson = fb.evaluate(command)
